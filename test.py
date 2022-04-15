@@ -66,7 +66,12 @@ def test(opt, model, encoder_dim, device, eval_set, writer, epoch=0, extract_noE
     if extract_noEval:
         return np.vstack([dbFeat_np,qFeat_np]), db_emb, q_emb, None, None
 
+    matching_time = time.time()
     predictions, bestDists = computeMatches(opt,N_VALUES,device,dbFeat,qFeat,dbFeat_np,qFeat_np)
+    matching_time = time.time() - matching_time
+    print(f"\n====> Query len: {qFeat_np.shape[0]}")
+    print(f"====> Database len: {dbFeat_np.shape[0]}")
+    print(f"====> Matching time: {matching_time:.3f} sec\n")
 
     # for each query get those within threshold distance
     gt,gtDists = eval_set.get_positives(retDists=True)
