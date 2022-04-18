@@ -1,3 +1,4 @@
+import pickle
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -8,6 +9,30 @@ import time
 import wandb
 
 from utils import seq2Batch, getRecallAtN, computeMatches, evaluate, N_VALUES
+
+
+def export_predictions(preds, eval_set, filename='test_2014-12-16-18-44-24'):
+    print("\n====> Exporting predictions")
+    print(f"\tpredictions.shape = {preds.shape}")
+    predictions = []
+    for q_idx, pred in enumerate(preds):
+        top_preds = []
+        for idx in pred:
+            indices = eval_set.getIndices(idx)
+            imgnames = eval_set.dbStruct.dbImage[indices[0]:indices[-1]+1]
+            imgnames = ['/'.join(n.split('/')[:-2])+'/'+n.split('/')[-1] for n in imgnames]
+            top_preds.append(imgnames)
+        q_indices = eval_set.getIndices(q_idx)
+        q_imgnames = eval_set.dbStruct.qImage[q_indices[0]:q_indices[-1]+1]
+        q_imgnames = ['/'.join(n.split('/')[:-2])+'/'+n.split('/')[-1] for n in q_imgnames]
+        pair = (q_imgnames, top_preds)
+        predictions.append(pair)
+    save_to = f'/home/docker_seqpntr/SeqPNTR/results/seqmatchnet_predictions_{filename}.pkl'
+    with open(save_to, 'wb') as handle:
+        pickle.dump(predictions, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    print(f"====> Dumped results to file: {save_to}")
+    print(f"\n\nsample: \n\tquery:\n{predictions[0][0]}\n\tpreds:\n{predictions[0][1]}\n\n")
+
 
 def test(opt, model, encoder_dim, device, eval_set, writer, epoch=0, extract_noEval=False):
     # TODO what if features dont fit in memory? 
@@ -53,7 +78,7 @@ def test(opt, model, encoder_dim, device, eval_set, writer, epoch=0, extract_noE
     # extracted for both db and query, now split in own sets
     qFeat = dbFeat[numDb:]
     dbFeat = dbFeat[:numDb]
-    print(dbFeat.shape, qFeat.shape)
+    print(f"dbFeat.shape = {dbFeat.shape}, qFeat.shape = {qFeat.shape}")
 
     qFeat_np = qFeat.detach().cpu().numpy().astype('float32')
     dbFeat_np = dbFeat.detach().cpu().numpy().astype('float32')
@@ -68,6 +93,9 @@ def test(opt, model, encoder_dim, device, eval_set, writer, epoch=0, extract_noE
 
     matching_time = time.time()
     predictions, bestDists = computeMatches(opt,N_VALUES,device,dbFeat,qFeat,dbFeat_np,qFeat_np)
+    
+    export_predictions(predictions, eval_set)
+
     matching_time = time.time() - matching_time
     print(f"\n====> Query len: {qFeat_np.shape[0]}")
     print(f"====> Database len: {dbFeat_np.shape[0]}")
